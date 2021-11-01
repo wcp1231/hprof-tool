@@ -1,2 +1,4 @@
 .idea
 hprof-tool.iml
+
+test-dump-file/heap_dump_test.index
