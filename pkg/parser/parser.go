@@ -7,46 +7,8 @@ import (
 	"hprof-tool/pkg/model"
 	"io"
 	"math"
+	"os"
 	"time"
-)
-
-// HProfRecordType is a HProf record type.
-type HProfRecordType byte
-
-// HProfHDRecordType is a HProf heap dump subrecord type.
-type HProfHDRecordType byte
-
-// HProf's record types.
-const (
-	HProfRecordTypeUTF8            HProfRecordType = 0x01
-	HProfRecordTypeLoadClass                       = 0x02
-	HProfRecordTypeUnloadClass                     = 0x03
-	HProfRecordTypeFrame                           = 0x04
-	HProfRecordTypeTrace                           = 0x05
-	HProfRecordTypeAllocSites                      = 0x06
-	HProfRecordTypeHeapSummary                     = 0x07
-	HProfRecordTypeStartThread                     = 0x0a
-	HProfRecordTypeEndThread                       = 0x0b
-	HProfRecordTypeHeapDump                        = 0x0c
-	HProfRecordTypeHeapDumpSegment                 = 0x1c
-	HProfRecordTypeHeapDumpEnd                     = 0x2c
-	HProfRecordTypeCPUSamples                      = 0x0d
-	HProfRecordTypeControlSettings                 = 0x0e
-
-	HProfHDRecordTypeRootUnknown     HProfHDRecordType = 0xff
-	HProfHDRecordTypeRootJNIGlobal                     = 0x01
-	HProfHDRecordTypeRootJNILocal                      = 0x02
-	HProfHDRecordTypeRootJavaFrame                     = 0x03
-	HProfHDRecordTypeRootNativeStack                   = 0x04
-	HProfHDRecordTypeRootStickyClass                   = 0x05
-	HProfHDRecordTypeRootThreadBlock                   = 0x06
-	HProfHDRecordTypeRootMonitorUsed                   = 0x07
-	HProfHDRecordTypeRootThreadObj                     = 0x08
-
-	HProfHDRecordTypeClassDump          HProfHDRecordType = 0x20
-	HProfHDRecordTypeInstanceDump                         = 0x21
-	HProfHDRecordTypeObjectArrayDump                      = 0x22
-	HProfHDRecordTypePrimitiveArrayDump                   = 0x23
 )
 
 var (
@@ -76,16 +38,30 @@ type HProfHeader struct {
 
 // HProfParser is a HProf file parser.
 type HProfParser struct {
+	hFile                  *os.File
 	reader                 *bufio.Reader
+	pos                    int64
 	identifierSize         int
 	heapDumpFrameLeftBytes uint32
 }
 
 // NewParser creates a new HProf parser.
-func NewParser(r io.Reader) *HProfParser {
+func NewParser(r *os.File) *HProfParser {
 	return &HProfParser{
+		hFile:  r,
 		reader: bufio.NewReader(r),
 	}
+}
+
+// Seek 移动文件位置，读取某段数据
+func (p *HProfParser) Seek(offset int64) error {
+	pos, err := p.hFile.Seek(offset, 0)
+	if err != nil {
+		return err
+	}
+	p.pos = pos
+	p.reader.Reset(p.hFile)
+	return nil
 }
 
 func (p *HProfParser) IdSize() byte {
@@ -102,6 +78,7 @@ func (p *HProfParser) ParseHeader() (*HProfHeader, error) {
 	if err != nil {
 		return nil, err
 	}
+	p.pos += int64(len(bs))
 
 	is, err := p.readUint32()
 	if err != nil {
@@ -151,136 +128,37 @@ func (p *HProfParser) ParseHeader() (*HProfHeader, error) {
 // *   `*hprofdata.HProfRootThreadObj`
 //
 // It returns io.EOF at the end of the file.
-func (p *HProfParser) ParseRecord() (interface{}, error) {
+func (p *HProfParser) ParseRecord() (model.HProfRecord, error) {
 	if p.heapDumpFrameLeftBytes > 0 {
 		return p.parseHeapDumpFrame()
 	}
 
-	rt, err := p.reader.ReadByte()
+	rt, err := p.parseType()
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = p.readUint32()
-	if err != nil {
-		return nil, err
-	}
-
-	sz, err := p.readUint32()
-	if err != nil {
-		return nil, err
-	}
-
-	switch HProfRecordType(rt) {
-	case HProfRecordTypeUTF8:
-		nameID, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		bs := make([]byte, int(sz)-p.identifierSize)
-		if _, err := io.ReadFull(p.reader, bs); err != nil {
-			return nil, err
-		}
-		return &model.HProfRecordUTF8{
-			NameId: nameID,
-			Name:   bs,
-		}, nil
-	case HProfRecordTypeLoadClass:
-		csn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		oid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		tsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		cnid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		return &model.HProfRecordLoadClass{
-			ClassSerialNumber:      csn,
-			ClassObjectId:          oid,
-			StackTraceSerialNumber: tsn,
-			ClassNameId:            cnid,
-		}, nil
-	case HProfRecordTypeFrame:
-		sfid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		mnid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		msgnid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		sfnid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		csn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		ln, err := p.readInt32()
-		if err != nil {
-			return nil, err
-		}
-		return &model.HProfRecordFrame{
-			StackFrameId:      sfid,
-			MethodNameId:      mnid,
-			MethodSignatureId: msgnid,
-			SourceFileNameId:  sfnid,
-			ClassSerialNumber: csn,
-			LineNumber:        ln,
-		}, nil
-	case HProfRecordTypeTrace:
-		stsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		tsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		nr, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		sfids := []uint64{}
-		for i := uint32(0); i < nr; i++ {
-			sfid, err := p.readID()
-			if err != nil {
-				return nil, err
-			}
-			sfids = append(sfids, sfid)
-		}
-		return &model.HProfRecordTrace{
-			StackTraceSerialNumber: stsn,
-			ThreadSerialNumber:     tsn,
-			StackFrameIds:          sfids,
-		}, nil
-	case HProfRecordTypeHeapDumpSegment:
-		if sz == 0 {
-			// Truncated. Set to the max int.
-			sz = math.MaxUint32
-		}
-		p.heapDumpFrameLeftBytes = sz
-		return &model.HProfRecordHeapDumpBoundary{}, nil
-	case HProfRecordTypeHeapDumpEnd:
-		return &model.HProfRecordHeapDumpBoundary{}, nil
-	case HProfRecordTypeHeapDump:
-		p.heapDumpFrameLeftBytes = sz
-		return &model.HProfRecordHeapDumpBoundary{}, nil
+	switch model.HProfRecordType(rt) {
+	case model.HProfRecordTypeUTF8:
+		return p.parseUtf8Record()
+	case model.HProfRecordTypeLoadClass:
+		return p.parseLoadedClassRecord()
+	case model.HProfRecordTypeFrame:
+		return p.parseFrameRecord()
+	case model.HProfRecordTypeTrace:
+		return p.parseTraceRecord()
+	case model.HProfRecordTypeHeapDumpSegment:
+		return p.parseHeapDumpSegment()
+	case model.HProfRecordTypeHeapDumpEnd:
+		return p.parseHeapDumpSegmentEnd()
+	case model.HProfRecordTypeHeapDump:
+		return p.parseHeapDump()
 	default:
-		_, err := p.readBytes(int(sz))
+		sz, err := p.parseRecordSize()
+		if err != nil {
+			return nil, err
+		}
+		_, err = p.readBytes(int(sz))
 		if err != nil {
 			return nil, err
 		}
@@ -288,293 +166,377 @@ func (p *HProfParser) ParseRecord() (interface{}, error) {
 	}
 }
 
-func (p *HProfParser) parseHeapDumpFrame() (interface{}, error) {
+func (p *HProfParser) parseHeapDumpFrame() (model.HProfRecord, error) {
 	rt, err := p.readByte()
 	if err != nil {
 		return nil, err
 	}
 
-	switch HProfHDRecordType(rt) {
-	case HProfHDRecordTypeRootJNIGlobal:
-		oid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		rid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		return &model.HProfRootJNIGlobal{
-			ObjectId:       oid,
-			JniGlobalRefId: rid,
-		}, nil
+	switch model.HProfHDRecordType(rt) {
+	case model.HProfHDRecordTypeRootJNIGlobal:
+		return p.parseRootJNIGlobalRecord()
+	case model.HProfHDRecordTypeRootJNILocal:
+		return p.parseRootJNILocalRecord()
+	case model.HProfHDRecordTypeRootJavaFrame:
+		return p.parseRootJavaFrameRecord()
+	case model.HProfHDRecordTypeRootStickyClass:
+		return p.parseRootStickyClassRecord()
+	case model.HProfHDRecordTypeRootThreadObj:
+		return p.parseRootThreadObjRecord()
+	case model.HProfHDRecordTypeRootMonitorUsed:
+		return p.ParseRootMonitorUsedRecord()
+	case model.HProfHDRecordTypeClassDump:
+		return p.ParseClassDumpRecord()
+	case model.HProfHDRecordTypeInstanceDump:
+		return p.ParseInstanceRecord()
+	case model.HProfHDRecordTypeObjectArrayDump:
+		return p.ParseObjectArrayRecord()
+	case model.HProfHDRecordTypePrimitiveArrayDump:
+		return p.ParsePrimitiveArrayDumpRecord()
+	default:
+		return nil, fmt.Errorf("unknown heap dump record type: 0x%x", rt)
+	}
+}
 
-	case HProfHDRecordTypeRootJNILocal:
-		oid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		tsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		fn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		return &model.HProfRootJNILocal{
-			ObjectId:                oid,
-			ThreadSerialNumber:      tsn,
-			FrameNumberInStackTrace: fn,
-		}, nil
+func (p *HProfParser) parseType() (byte, error) {
+	p.pos += 1
+	return p.reader.ReadByte()
+}
 
-	case HProfHDRecordTypeRootJavaFrame:
-		oid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		tsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		fn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		return &model.HProfRootJavaFrame{
-			ObjectId:                oid,
-			ThreadSerialNumber:      tsn,
-			FrameNumberInStackTrace: fn,
-		}, nil
+func (p *HProfParser) parseRecordSize() (uint32, error) {
+	_, err := p.readUint32()
+	if err != nil {
+		return 0, err
+	}
 
-	case HProfHDRecordTypeRootStickyClass:
-		oid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		return &model.HProfRootStickyClass{
-			ObjectId: oid,
-		}, nil
+	return p.readUint32()
+}
 
-	case HProfHDRecordTypeRootThreadObj:
-		toid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		tsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		stsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		return &model.HProfRootThreadObj{
-			ThreadObjectId:           toid,
-			ThreadSequenceNumber:     tsn,
-			StackTraceSequenceNumber: stsn,
-		}, nil
+func (p *HProfParser) parseUtf8Record() (*model.HProfRecordUTF8, error) {
+	pos := p.pos
+	sz, err := p.parseRecordSize()
+	if err != nil {
+		return nil, err
+	}
+	nameID, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	bs := make([]byte, int(sz)-p.identifierSize)
+	rn, err := io.ReadFull(p.reader, bs)
+	if err != nil {
+		return nil, err
+	}
+	p.pos += int64(rn)
 
-	case HProfHDRecordTypeRootMonitorUsed:
-		oid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		return &model.HProfRootMonitorUsed{
-			ObjectId: oid,
-		}, nil
+	return &model.HProfRecordUTF8{
+		NameId: nameID,
+		Name:   bs,
 
-	case HProfHDRecordTypeClassDump:
-		coid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		stsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		scoid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		cloid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		sgnoid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		pdoid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		_, err = p.readID()
-		if err != nil {
-			return nil, err
-		}
-		_, err = p.readID()
-		if err != nil {
-			return nil, err
-		}
-		insz, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
+		POS: pos,
+	}, nil
+}
 
-		cpsz, err := p.readUint16()
-		if err != nil {
-			return nil, err
-		}
-		cps := []*model.HProfClassDump_ConstantPoolEntry{}
-		for i := uint16(0); i < cpsz; i++ {
-			cpix, err := p.readUint16()
-			if err != nil {
-				return nil, err
-			}
-			ty, err := p.readByte()
-			if err != nil {
-				return nil, err
-			}
-			v, err := p.readValue(model.HProfValueType(ty))
-			if err != nil {
-				return nil, err
-			}
-			cps = append(cps, &model.HProfClassDump_ConstantPoolEntry{
-				ConstantPoolIndex: uint32(cpix),
-				Type:  model.HProfValueType(ty),
-				Value: v,
-			})
-		}
+func (p *HProfParser) parseLoadedClassRecord() (*model.HProfRecordLoadClass, error) {
+	pos := p.pos
+	_, err := p.parseRecordSize()
+	if err != nil {
+		return nil, err
+	}
 
-		sfsz, err := p.readUint16()
-		if err != nil {
-			return nil, err
-		}
-		sfs := []*model.HProfClassDump_StaticField{}
-		for i := uint16(0); i < sfsz; i++ {
-			sfnid, err := p.readID()
-			if err != nil {
-				return nil, err
-			}
-			ty, err := p.readByte()
-			if err != nil {
-				return nil, err
-			}
-			v, err := p.readValue(model.HProfValueType(ty))
-			if err != nil {
-				return nil, err
-			}
-			sfs = append(sfs, &model.HProfClassDump_StaticField{
-				NameId: sfnid,
-				Type:   model.HProfValueType(ty),
-				Value:  v,
-			})
-		}
+	csn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	oid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	tsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	cnid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfRecordLoadClass{
+		ClassSerialNumber:      csn,
+		ClassObjectId:          oid,
+		StackTraceSerialNumber: tsn,
+		ClassNameId:            cnid,
 
-		ifsz, err := p.readUint16()
-		if err != nil {
-			return nil, err
-		}
-		ifs := []*model.HProfClassDump_InstanceField{}
-		for i := uint16(0); i < ifsz; i++ {
-			ifnid, err := p.readID()
-			if err != nil {
-				return nil, err
-			}
-			ty, err := p.readByte()
-			if err != nil {
-				return nil, err
-			}
-			ifs = append(ifs, &model.HProfClassDump_InstanceField{
-				NameId: ifnid,
-				Type:   model.HProfValueType(ty),
-			})
-		}
+		POS: pos,
+	}, nil
+}
 
-		return &model.HProfClassDump{
-			ClassObjectId:            coid,
-			StackTraceSerialNumber:   stsn,
-			SuperClassObjectId:       scoid,
-			ClassLoaderObjectId:      cloid,
-			SignersObjectId:          sgnoid,
-			ProtectionDomainObjectId: pdoid,
-			InstanceSize:             insz,
-			ConstantPoolEntries:      cps,
-			StaticFields:             sfs,
-			InstanceFields:           ifs,
-		}, nil
+func (p *HProfParser) parseFrameRecord() (*model.HProfRecordFrame, error) {
+	pos := p.pos
+	_, err := p.parseRecordSize()
+	if err != nil {
+		return nil, err
+	}
 
-	case HProfHDRecordTypeInstanceDump:
-		oid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		stsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		coid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		fsz, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		bs, err := p.readBytes(int(fsz))
-		if err != nil {
-			return nil, err
-		}
-		return &model.HProfInstanceDump{
-			ObjectId:               oid,
-			StackTraceSerialNumber: stsn,
-			ClassObjectId:          coid,
-			Values:                 bs,
-		}, nil
+	sfid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	mnid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	msgnid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	sfnid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	csn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	ln, err := p.readInt32()
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfRecordFrame{
+		StackFrameId:      sfid,
+		MethodNameId:      mnid,
+		MethodSignatureId: msgnid,
+		SourceFileNameId:  sfnid,
+		ClassSerialNumber: csn,
+		LineNumber:        ln,
 
-	case HProfHDRecordTypeObjectArrayDump:
-		aoid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		stsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		asz, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		acoid, err := p.readID()
-		if err != nil {
-			return nil, err
-		}
-		vs := []uint64{}
-		for i := uint32(0); i < asz; i++ {
-			v, err := p.readID()
-			if err != nil {
-				return nil, err
-			}
-			vs = append(vs, v)
-		}
-		return &model.HProfObjectArrayDump{
-			ArrayObjectId:          aoid,
-			StackTraceSerialNumber: stsn,
-			ArrayClassObjectId:     acoid,
-			ElementObjectIds:       vs,
-		}, nil
+		POS: pos,
+	}, nil
+}
 
-	case HProfHDRecordTypePrimitiveArrayDump:
-		aoid, err := p.readID()
+func (p *HProfParser) parseTraceRecord() (*model.HProfRecordTrace, error) {
+	pos := p.pos
+	_, err := p.parseRecordSize()
+	if err != nil {
+		return nil, err
+	}
+
+	stsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	tsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	nr, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	sfids := []uint64{}
+	for i := uint32(0); i < nr; i++ {
+		sfid, err := p.readID()
 		if err != nil {
 			return nil, err
 		}
-		stsn, err := p.readUint32()
-		if err != nil {
-			return nil, err
-		}
-		asz, err := p.readUint32()
+		sfids = append(sfids, sfid)
+	}
+	return &model.HProfRecordTrace{
+		StackTraceSerialNumber: stsn,
+		ThreadSerialNumber:     tsn,
+		StackFrameIds:          sfids,
+
+		POS: pos,
+	}, nil
+}
+
+func (p *HProfParser) parseHeapDumpSegment() (*model.HProfRecordHeapDumpBoundary, error) {
+	sz, err := p.parseRecordSize()
+	if err != nil {
+		return nil, err
+	}
+
+	if sz == 0 {
+		// Truncated. Set to the max int.
+		sz = math.MaxUint32
+	}
+	p.heapDumpFrameLeftBytes = sz
+	return &model.HProfRecordHeapDumpBoundary{}, nil
+}
+
+func (p *HProfParser) parseHeapDumpSegmentEnd() (*model.HProfRecordHeapDumpBoundary, error) {
+	_, err := p.parseRecordSize()
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfRecordHeapDumpBoundary{}, nil
+}
+
+func (p *HProfParser) parseHeapDump() (*model.HProfRecordHeapDumpBoundary, error) {
+	sz, err := p.parseRecordSize()
+	if err != nil {
+		return nil, err
+	}
+	p.heapDumpFrameLeftBytes = sz
+	return &model.HProfRecordHeapDumpBoundary{}, nil
+}
+
+func (p *HProfParser) parseRootJNIGlobalRecord() (*model.HProfRootJNIGlobal, error) {
+	pos := p.pos
+	oid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	rid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfRootJNIGlobal{
+		ObjectId:       oid,
+		JniGlobalRefId: rid,
+
+		POS: pos,
+	}, nil
+}
+
+func (p *HProfParser) parseRootJNILocalRecord() (*model.HProfRootJNILocal, error) {
+	pos := p.pos
+	oid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	tsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	fn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfRootJNILocal{
+		ObjectId:                oid,
+		ThreadSerialNumber:      tsn,
+		FrameNumberInStackTrace: fn,
+
+		POS: pos,
+	}, nil
+}
+
+func (p *HProfParser) parseRootJavaFrameRecord() (*model.HProfRootJavaFrame, error) {
+	pos := p.pos
+	oid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	tsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	fn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfRootJavaFrame{
+		ObjectId:                oid,
+		ThreadSerialNumber:      tsn,
+		FrameNumberInStackTrace: fn,
+
+		POS: pos,
+	}, nil
+}
+
+func (p *HProfParser) parseRootStickyClassRecord() (*model.HProfRootStickyClass, error) {
+	pos := p.pos
+	oid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfRootStickyClass{
+		ObjectId: oid,
+
+		POS: pos,
+	}, nil
+}
+
+func (p *HProfParser) parseRootThreadObjRecord() (*model.HProfRootThreadObj, error) {
+	pos := p.pos
+	toid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	tsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	stsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfRootThreadObj{
+		ThreadObjectId:           toid,
+		ThreadSequenceNumber:     tsn,
+		StackTraceSequenceNumber: stsn,
+
+		POS: pos,
+	}, nil
+}
+
+func (p *HProfParser) ParseRootMonitorUsedRecord() (*model.HProfRootMonitorUsed, error) {
+	oid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfRootMonitorUsed{
+		ObjectId: oid,
+	}, nil
+}
+
+func (p *HProfParser) ParseClassDumpRecord() (*model.HProfClassDump, error) {
+	pos := p.pos
+	coid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	stsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	scoid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	cloid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	sgnoid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	pdoid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = p.readID()
+	if err != nil {
+		return nil, err
+	}
+	_, err = p.readID()
+	if err != nil {
+		return nil, err
+	}
+	insz, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+
+	cpsz, err := p.readUint16()
+	if err != nil {
+		return nil, err
+	}
+	cps := []*model.HProfClassDump_ConstantPoolEntry{}
+	for i := uint16(0); i < cpsz; i++ {
+		cpix, err := p.readUint16()
 		if err != nil {
 			return nil, err
 		}
@@ -582,19 +544,176 @@ func (p *HProfParser) parseHeapDumpFrame() (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		bs, err := p.readArray(model.HProfValueType(ty), int(asz))
+		v, err := p.readValue(model.HProfValueType(ty))
 		if err != nil {
 			return nil, err
 		}
-		return &model.HProfPrimitiveArrayDump{
-			ArrayObjectId:          aoid,
-			StackTraceSerialNumber: stsn,
-			ElementType:            model.HProfValueType(ty),
-			Values:                 bs,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown heap dump record type: 0x%x", rt)
+		cps = append(cps, &model.HProfClassDump_ConstantPoolEntry{
+			ConstantPoolIndex: uint32(cpix),
+			Type:              model.HProfValueType(ty),
+			Value:             v,
+		})
 	}
+
+	sfsz, err := p.readUint16()
+	if err != nil {
+		return nil, err
+	}
+	sfs := []*model.HProfClassDump_StaticField{}
+	for i := uint16(0); i < sfsz; i++ {
+		sfnid, err := p.readID()
+		if err != nil {
+			return nil, err
+		}
+		ty, err := p.readByte()
+		if err != nil {
+			return nil, err
+		}
+		v, err := p.readValue(model.HProfValueType(ty))
+		if err != nil {
+			return nil, err
+		}
+		sfs = append(sfs, &model.HProfClassDump_StaticField{
+			NameId: sfnid,
+			Type:   model.HProfValueType(ty),
+			Value:  v,
+		})
+	}
+
+	ifsz, err := p.readUint16()
+	if err != nil {
+		return nil, err
+	}
+	ifs := []*model.HProfClassDump_InstanceField{}
+	for i := uint16(0); i < ifsz; i++ {
+		ifnid, err := p.readID()
+		if err != nil {
+			return nil, err
+		}
+		ty, err := p.readByte()
+		if err != nil {
+			return nil, err
+		}
+		ifs = append(ifs, &model.HProfClassDump_InstanceField{
+			NameId: ifnid,
+			Type:   model.HProfValueType(ty),
+		})
+	}
+
+	return &model.HProfClassDump{
+		ClassObjectId:            coid,
+		StackTraceSerialNumber:   stsn,
+		SuperClassObjectId:       scoid,
+		ClassLoaderObjectId:      cloid,
+		SignersObjectId:          sgnoid,
+		ProtectionDomainObjectId: pdoid,
+		InstanceSize:             insz,
+		ConstantPoolEntries:      cps,
+		StaticFields:             sfs,
+		InstanceFields:           ifs,
+
+		POS: pos,
+	}, nil
+}
+
+func (p *HProfParser) ParseInstanceRecord() (*model.HProfInstanceDump, error) {
+	pos := p.pos
+	oid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	stsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	coid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	fsz, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	bs, err := p.readBytes(int(fsz))
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfInstanceDump{
+		ObjectId:               oid,
+		StackTraceSerialNumber: stsn,
+		ClassObjectId:          coid,
+		Values:                 bs,
+
+		POS: pos,
+	}, nil
+}
+
+func (p *HProfParser) ParseObjectArrayRecord() (*model.HProfObjectArrayDump, error) {
+	pos := p.pos
+	aoid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	stsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	asz, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	acoid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	vs := []uint64{}
+	for i := uint32(0); i < asz; i++ {
+		v, err := p.readID()
+		if err != nil {
+			return nil, err
+		}
+		vs = append(vs, v)
+	}
+	return &model.HProfObjectArrayDump{
+		ArrayObjectId:          aoid,
+		StackTraceSerialNumber: stsn,
+		ArrayClassObjectId:     acoid,
+		ElementObjectIds:       vs,
+
+		POS: pos,
+	}, nil
+}
+
+func (p *HProfParser) ParsePrimitiveArrayDumpRecord() (*model.HProfPrimitiveArrayDump, error) {
+	pos := p.pos
+	aoid, err := p.readID()
+	if err != nil {
+		return nil, err
+	}
+	stsn, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	asz, err := p.readUint32()
+	if err != nil {
+		return nil, err
+	}
+	ty, err := p.readByte()
+	if err != nil {
+		return nil, err
+	}
+	bs, err := p.readArray(model.HProfValueType(ty), int(asz))
+	if err != nil {
+		return nil, err
+	}
+	return &model.HProfPrimitiveArrayDump{
+		ArrayObjectId:          aoid,
+		StackTraceSerialNumber: stsn,
+		ElementType:            model.HProfValueType(ty),
+		Values:                 bs,
+
+		POS: pos,
+	}, nil
 }
 
 func (p *HProfParser) readByte() (byte, error) {
@@ -602,6 +721,7 @@ func (p *HProfParser) readByte() (byte, error) {
 	if err != nil {
 		return 0, err
 	}
+	p.pos += 1
 	if p.heapDumpFrameLeftBytes > 0 {
 		p.heapDumpFrameLeftBytes--
 	}
@@ -614,12 +734,14 @@ func (p *HProfParser) readID() (uint64, error) {
 		if err := binary.Read(p.reader, binary.BigEndian, &v); err != nil {
 			return 0, err
 		}
+		p.pos += 8
 	} else if p.identifierSize == 4 {
 		var v2 uint32
 		if err := binary.Read(p.reader, binary.BigEndian, &v2); err != nil {
 			return 0, err
 		}
 		v = uint64(v2)
+		p.pos += 4
 	} else {
 		return 0, fmt.Errorf("odd identifier size: %d", p.identifierSize)
 	}
@@ -631,7 +753,9 @@ func (p *HProfParser) readID() (uint64, error) {
 
 func (p *HProfParser) readBytes(n int) ([]byte, error) {
 	bs := make([]byte, n)
-	if _, err := io.ReadFull(p.reader, bs); err != nil {
+	rn, err := io.ReadFull(p.reader, bs)
+	p.pos += int64(rn)
+	if err != nil {
 		return nil, err
 	}
 	if p.heapDumpFrameLeftBytes > 0 {
@@ -650,7 +774,9 @@ func (p *HProfParser) readArray(ty model.HProfValueType, n int) ([]byte, error) 
 	}
 
 	bs := make([]byte, int(sz)*n)
-	if _, err := io.ReadFull(p.reader, bs); err != nil {
+	rn, err := io.ReadFull(p.reader, bs)
+	p.pos += int64(rn)
+	if err != nil {
 		return nil, err
 	}
 	if p.heapDumpFrameLeftBytes > 0 {
@@ -669,7 +795,9 @@ func (p *HProfParser) readValue(ty model.HProfValueType) (uint64, error) {
 	}
 
 	bs := make([]byte, 8)
-	if _, err := io.ReadFull(p.reader, bs[:int(sz)]); err != nil {
+	n, err := io.ReadFull(p.reader, bs[:int(sz)])
+	p.pos += int64(n)
+	if err != nil {
 		return 0, err
 	}
 	if p.heapDumpFrameLeftBytes > 0 {
@@ -686,6 +814,7 @@ func (p *HProfParser) readUint16() (uint16, error) {
 	if p.heapDumpFrameLeftBytes > 0 {
 		p.heapDumpFrameLeftBytes -= 2
 	}
+	p.pos += 2
 	return v, nil
 }
 
@@ -697,6 +826,7 @@ func (p *HProfParser) readUint32() (uint32, error) {
 	if p.heapDumpFrameLeftBytes > 0 {
 		p.heapDumpFrameLeftBytes -= 4
 	}
+	p.pos += 4
 	return v, nil
 }
 
@@ -708,5 +838,50 @@ func (p *HProfParser) readInt32() (int32, error) {
 	if p.heapDumpFrameLeftBytes > 0 {
 		p.heapDumpFrameLeftBytes -= 4
 	}
+	p.pos += 4
 	return v, nil
+}
+
+func (p *HProfParser) Pos() int64 {
+	return p.pos
+}
+
+func (p *HProfParser) ValueSize(typ model.HProfValueType) int {
+	return ValueSize[typ]
+}
+
+// ReadID 临时用来读 instance value
+func (p *HProfParser) ReadIDFromReader(idSize int, reader io.Reader) (uint64, error) {
+	var v uint64
+	if idSize == 8 {
+		if err := binary.Read(reader, binary.BigEndian, &v); err != nil {
+			return 0, err
+		}
+	} else if idSize == 4 {
+		var v2 uint32
+		if err := binary.Read(reader, binary.BigEndian, &v2); err != nil {
+			return 0, err
+		}
+		v = uint64(v2)
+	} else {
+		return 0, fmt.Errorf("odd identifier size: %d", p.identifierSize)
+	}
+	return v, nil
+}
+
+// ReadValueFromReader 临时用来读 instance value
+func (p *HProfParser) ReadValueFromReader(ty model.HProfValueType, reader io.Reader) (uint64, error) {
+	sz := ValueSize[ty]
+	if sz == -1 {
+		sz = p.identifierSize
+	}
+	if sz == 0 {
+		return 0, fmt.Errorf("odd value type: %d", ty)
+	}
+	bs := make([]byte, 8)
+	_, err := io.ReadFull(reader, bs[:int(sz)])
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint64(bs), nil
 }

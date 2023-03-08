@@ -1,61 +1,18 @@
 package model
 
-import global "hprof-tool/pkg/util"
-
-type HProfValueType int32
-
-const (
-	HProfValueType_UNKNOWN_HPROF_VALUE_TYPE HProfValueType = 0
-	// Object. The value of this type is an object_id of HProfInstanceDump,
-	// array_object_id of HProfObjectArrayDump or HProfPrimitiveArrayDump,
-	// or class_object_id of HProfClassDump.
-	//
-	// The value is basically a pointer and its size is defined in the hprof
-	// header, which is typically 4 bytes for 32-bit JVM hprof dumps or 8 bytes
-	// for 64-bit JVM hprof dumps.
-	HProfValueType_OBJECT HProfValueType = 2
-	// Boolean. Takes 0 or 1. One byte.
-	HProfValueType_BOOLEAN HProfValueType = 4
-	// Character. Two bytes.
-	HProfValueType_CHAR HProfValueType = 5
-	// Float. 4 bytes
-	HProfValueType_FLOAT HProfValueType = 6
-	// Double. 8 bytes.
-	HProfValueType_DOUBLE HProfValueType = 7
-	// Byte. One byte.
-	HProfValueType_BYTE HProfValueType = 8
-	// Short. Two bytes.
-	HProfValueType_SHORT HProfValueType = 9
-	// Integer. 4 bytes.
-	HProfValueType_INT HProfValueType = 10
-	// Long. 8 bytes.
-	HProfValueType_LONG HProfValueType = 11
+import (
+	global "hprof-tool/pkg/util"
 )
 
-var HProfValueType_name = map[HProfValueType]string{
-	0:  "UNKNOWN_HPROF_VALUE_TYPE",
-	2:  "OBJECT",
-	4:  "BOOLEAN",
-	5:  "CHAR",
-	6:  "FLOAT",
-	7:  "DOUBLE",
-	8:  "BYTE",
-	9:  "SHORT",
-	10: "INT",
-	11: "LONG",
+type HProfRecord interface {
+	Id() uint64
+	Type() HProfRecordType
+	Pos() int64
 }
 
-var HProfValueType_value = map[string]int32{
-	"UNKNOWN_HPROF_VALUE_TYPE": 0,
-	"OBJECT":                   2,
-	"BOOLEAN":                  4,
-	"CHAR":                     5,
-	"FLOAT":                    6,
-	"DOUBLE":                   7,
-	"BYTE":                     8,
-	"SHORT":                    9,
-	"INT":                      10,
-	"LONG":                     11,
+type HProfObjectRecord interface {
+	HProfRecord
+	ClassId() uint64
 }
 
 // UTF-8 byte sequence record.
@@ -63,12 +20,25 @@ var HProfValueType_value = map[string]int32{
 // Even though it says UTF-8, its content might not be a valid UTF-8 sequence.
 type HProfRecordUTF8 struct {
 	NameId uint64 `json:"name_id,omitempty"`
-	Name []byte `json:"name,omitempty"`
+	Name   []byte `json:"name,omitempty"`
+
+	POS int64
 }
 
-func (m *HProfRecordUTF8) GetNameId() uint64 {
+func (m *HProfRecordUTF8) Id() uint64 {
 	if m != nil {
 		return m.NameId
+	}
+	return 0
+}
+
+func (m *HProfRecordUTF8) Type() HProfRecordType {
+	return HProfRecordTypeUTF8
+}
+
+func (m *HProfRecordUTF8) Pos() int64 {
+	if m != nil {
+		return m.POS
 	}
 	return 0
 }
@@ -90,7 +60,27 @@ type HProfRecordLoadClass struct {
 	// created and loaded with a custom class loader?
 	StackTraceSerialNumber uint32 `json:"stack_trace_serial_number,omitempty"`
 	// Class name, associated with HProfRecordUTF8.
-	ClassNameId          uint64   `json:"class_name_id,omitempty"`
+	ClassNameId uint64 `json:"class_name_id,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfRecordLoadClass) Id() uint64 {
+	if m != nil {
+		return uint64(m.ClassSerialNumber)
+	}
+	return 0
+}
+
+func (m *HProfRecordLoadClass) Type() HProfRecordType {
+	return HProfRecordTypeLoadClass
+}
+
+func (m *HProfRecordLoadClass) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
 }
 
 func (m *HProfRecordLoadClass) GetClassSerialNumber() uint32 {
@@ -134,7 +124,27 @@ type HProfRecordFrame struct {
 	// Class serial number, associated with HProfRecordLoadClass.
 	ClassSerialNumber uint32 `json:"class_serial_number,omitempty"`
 	// Line number if available.
-	LineNumber           int32    `json:"line_number,omitempty"`
+	LineNumber int32 `json:"line_number,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfRecordFrame) Id() uint64 {
+	if m != nil {
+		return m.StackFrameId
+	}
+	return 0
+}
+
+func (m *HProfRecordFrame) Type() HProfRecordType {
+	return HProfRecordTypeFrame
+}
+
+func (m *HProfRecordFrame) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
 }
 
 func (m *HProfRecordFrame) GetStackFrameId() uint64 {
@@ -186,7 +196,27 @@ type HProfRecordTrace struct {
 	// Thread serial number.
 	ThreadSerialNumber uint32 `json:"thread_serial_number,omitempty"`
 	// Stack frame IDs, associated with HProfRecordFrame.
-	StackFrameIds        []uint64 `json:"stack_frame_ids,omitempty"`
+	StackFrameIds []uint64 `json:"stack_frame_ids,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfRecordTrace) Id() uint64 {
+	if m != nil {
+		return uint64(m.StackTraceSerialNumber)
+	}
+	return 0
+}
+
+func (m *HProfRecordTrace) Type() HProfRecordType {
+	return HProfRecordTypeTrace
+}
+
+func (m *HProfRecordTrace) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
 }
 
 func (m *HProfRecordTrace) GetStackTraceSerialNumber() uint32 {
@@ -210,7 +240,19 @@ func (m *HProfRecordTrace) GetStackFrameIds() []uint64 {
 	return nil
 }
 
-type HProfRecordHeapDumpBoundary struct {}
+type HProfRecordHeapDumpBoundary struct{}
+
+func (m *HProfRecordHeapDumpBoundary) Id() uint64 {
+	return 0
+}
+
+func (m *HProfRecordHeapDumpBoundary) Type() HProfRecordType {
+	return HProfRecordTypeHeapDump
+}
+
+func (m *HProfRecordHeapDumpBoundary) Pos() int64 {
+	return 0
+}
 
 // Class data dump.
 type HProfClassDump struct {
@@ -227,10 +269,46 @@ type HProfClassDump struct {
 	// Protection domain object ID. (No idea)
 	ProtectionDomainObjectId uint64 `json:"protection_domain_object_id,omitempty"`
 	// Instance size.
-	InstanceSize         uint32                              `json:"instance_size,omitempty"`
-	ConstantPoolEntries  []*HProfClassDump_ConstantPoolEntry `json:"constant_pool_entries,omitempty"`
-	StaticFields         []*HProfClassDump_StaticField       `json:"static_fields,omitempty"`
-	InstanceFields       []*HProfClassDump_InstanceField     `json:"instance_fields,omitempty"`
+	InstanceSize        uint32                              `json:"instance_size,omitempty"`
+	ConstantPoolEntries []*HProfClassDump_ConstantPoolEntry `json:"constant_pool_entries,omitempty"`
+	StaticFields        []*HProfClassDump_StaticField       `json:"static_fields,omitempty"`
+	InstanceFields      []*HProfClassDump_InstanceField     `json:"instance_fields,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfClassDump) Id() uint64 {
+	if m != nil {
+		return m.ClassObjectId
+	}
+	return 0
+}
+
+func (m *HProfClassDump) Type() HProfRecordType {
+	return HProfRecordType(HProfHDRecordTypeClassDump)
+}
+
+func (m *HProfClassDump) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
+}
+
+// GetReferences 计算连接
+func (m *HProfClassDump) GetReferences() []uint64 {
+	var references []uint64
+	references = append(references, m.ClassObjectId)
+	if m.SuperClassObjectId > 0 {
+		references = append(references, m.SuperClassObjectId)
+	}
+	references = append(references, m.ClassLoaderObjectId)
+	for _, field := range m.StaticFields {
+		if field.Type == HProfValueType_OBJECT {
+			references = append(references, field.Value)
+		}
+	}
+	return references
 }
 
 func (m *HProfClassDump) GetClassObjectId() uint64 {
@@ -309,9 +387,9 @@ func (m *HProfClassDump) Size() uint32 {
 
 // Constant pool entry (appears to be unused according to heapDumper.cpp).
 type HProfClassDump_ConstantPoolEntry struct {
-	ConstantPoolIndex    uint32         `json:"constant_pool_index,omitempty"`
-	Type                 HProfValueType `json:"type,omitempty"`
-	Value                uint64         `json:"value,omitempty"`
+	ConstantPoolIndex uint32         `json:"constant_pool_index,omitempty"`
+	Type              HProfValueType `json:"type,omitempty"`
+	Value             uint64         `json:"value,omitempty"`
 }
 
 func (m *HProfClassDump_ConstantPoolEntry) GetConstantPoolIndex() uint32 {
@@ -342,7 +420,7 @@ type HProfClassDump_StaticField struct {
 	// Type of the static field.
 	Type HProfValueType `json:"type,omitempty"`
 	// Value of the static field. Must be interpreted based on the type.
-	Value                uint64   `json:"value,omitempty"`
+	Value uint64 `json:"value,omitempty"`
 }
 
 func (m *HProfClassDump_StaticField) GetNameId() uint64 {
@@ -371,7 +449,7 @@ type HProfClassDump_InstanceField struct {
 	// Instance field name, associated with HProfRecordUTF8.
 	NameId uint64 `json:"name_id,omitempty"`
 	// Type of the instance field.
-	Type                 HProfValueType `json:"type,omitempty"`
+	Type HProfValueType `json:"type,omitempty"`
 
 	// 只用来记录对象类型的 ID
 	Value uint64
@@ -405,7 +483,31 @@ type HProfInstanceDump struct {
 	// definition of HProfClassDump. If the class has three int fields, this
 	// values starts from three 4-byte integers. Then, it continues to the super
 	// class's instance fields.
-	Values               []byte   `json:"values,omitempty"`
+	Values []byte `json:"values,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfInstanceDump) Id() uint64 {
+	if m != nil {
+		return m.ObjectId
+	}
+	return 0
+}
+
+func (m *HProfInstanceDump) Type() HProfRecordType {
+	return HProfRecordType(HProfHDRecordTypeInstanceDump)
+}
+
+func (m *HProfInstanceDump) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfInstanceDump) ClassId() uint64 {
+	return m.ClassObjectId
 }
 
 func (m *HProfInstanceDump) GetObjectId() uint64 {
@@ -450,7 +552,31 @@ type HProfObjectArrayDump struct {
 	// Class object ID of the array elements, associated with HProfClassDump.
 	ArrayClassObjectId uint64 `json:"array_class_object_id,omitempty"`
 	// Element object IDs.
-	ElementObjectIds     []uint64 `json:"element_object_ids,omitempty"`
+	ElementObjectIds []uint64 `json:"element_object_ids,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfObjectArrayDump) Id() uint64 {
+	if m != nil {
+		return m.ArrayObjectId
+	}
+	return 0
+}
+
+func (m *HProfObjectArrayDump) Type() HProfRecordType {
+	return HProfRecordType(HProfHDRecordTypeObjectArrayDump)
+}
+
+func (m *HProfObjectArrayDump) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfObjectArrayDump) ClassId() uint64 {
+	return m.ArrayClassObjectId
 }
 
 func (m *HProfObjectArrayDump) GetArrayObjectId() uint64 {
@@ -485,7 +611,7 @@ func (m *HProfObjectArrayDump) GetClassObjectId() uint64 {
 	return m.GetArrayClassObjectId()
 }
 func (m *HProfObjectArrayDump) Size() uint32 {
-	return uint32(8 + 4 + 8 + 4 + len(m.ElementObjectIds) * global.ID_SIZE)
+	return uint32(8 + 4 + 8 + 4 + len(m.ElementObjectIds)*global.ID_SIZE)
 }
 
 // Primitive array dump.
@@ -500,7 +626,31 @@ type HProfPrimitiveArrayDump struct {
 	//
 	// Values need to be parsed based on the element_type. If the array is an int
 	// array with three elements, this field has 12 bytes.
-	Values               []byte   `json:"values,omitempty"`
+	Values []byte `json:"values,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfPrimitiveArrayDump) Id() uint64 {
+	if m != nil {
+		return m.ArrayObjectId
+	}
+	return 0
+}
+
+func (m *HProfPrimitiveArrayDump) Type() HProfRecordType {
+	return HProfRecordType(HProfHDRecordTypePrimitiveArrayDump)
+}
+
+func (m *HProfPrimitiveArrayDump) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfPrimitiveArrayDump) ClassId() uint64 {
+	return uint64(m.ElementType)
 }
 
 func (m *HProfPrimitiveArrayDump) GetArrayObjectId() uint64 {
@@ -543,7 +693,27 @@ type HProfRootJNIGlobal struct {
 	// Object ID.
 	ObjectId uint64 `json:"object_id,omitempty"`
 	// JNI global ref ID. (No idea)
-	JniGlobalRefId       uint64   `json:"jni_global_ref_id,omitempty"`
+	JniGlobalRefId uint64 `json:"jni_global_ref_id,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfRootJNIGlobal) Id() uint64 {
+	if m != nil {
+		return m.ObjectId
+	}
+	return 0
+}
+
+func (m *HProfRootJNIGlobal) Type() HProfRecordType {
+	return HProfRecordType(HProfHDRecordTypeRootJNIGlobal)
+}
+
+func (m *HProfRootJNIGlobal) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
 }
 
 func (m *HProfRootJNIGlobal) GetObjectId() uint64 {
@@ -567,7 +737,27 @@ type HProfRootJNILocal struct {
 	// Thread serial number.
 	ThreadSerialNumber uint32 `json:"thread_serial_number,omitempty"`
 	// Frame number in the trace.
-	FrameNumberInStackTrace uint32   `json:"frame_number_in_stack_trace,omitempty"`
+	FrameNumberInStackTrace uint32 `json:"frame_number_in_stack_trace,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfRootJNILocal) Id() uint64 {
+	if m != nil {
+		return m.ObjectId
+	}
+	return 0
+}
+
+func (m *HProfRootJNILocal) Type() HProfRecordType {
+	return HProfRecordType(HProfHDRecordTypeRootJNILocal)
+}
+
+func (m *HProfRootJNILocal) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
 }
 
 func (m *HProfRootJNILocal) GetObjectId() uint64 {
@@ -598,7 +788,27 @@ type HProfRootJavaFrame struct {
 	// Thread serial number.
 	ThreadSerialNumber uint32 `json:"thread_serial_number,omitempty"`
 	// Frame number in the trace.
-	FrameNumberInStackTrace uint32   `json:"frame_number_in_stack_trace,omitempty"`
+	FrameNumberInStackTrace uint32 `json:"frame_number_in_stack_trace,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfRootJavaFrame) Id() uint64 {
+	if m != nil {
+		return m.ObjectId
+	}
+	return 0
+}
+
+func (m *HProfRootJavaFrame) Type() HProfRecordType {
+	return HProfRecordType(HProfHDRecordTypeRootJavaFrame)
+}
+
+func (m *HProfRootJavaFrame) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
 }
 
 func (m *HProfRootJavaFrame) GetObjectId() uint64 {
@@ -625,7 +835,27 @@ func (m *HProfRootJavaFrame) GetFrameNumberInStackTrace() uint32 {
 // System classes (No idea).
 type HProfRootStickyClass struct {
 	// Object ID.
-	ObjectId             uint64   `json:"object_id,omitempty"`
+	ObjectId uint64 `json:"object_id,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfRootStickyClass) Id() uint64 {
+	if m != nil {
+		return m.ObjectId
+	}
+	return 0
+}
+
+func (m *HProfRootStickyClass) Type() HProfRecordType {
+	return HProfRecordType(HProfHDRecordTypeRootStickyClass)
+}
+
+func (m *HProfRootStickyClass) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
 }
 
 func (m *HProfRootStickyClass) GetObjectId() uint64 {
@@ -642,7 +872,27 @@ type HProfRootThreadObj struct {
 	// Thread sequence number. (It seems this is same as thread serial number.)
 	ThreadSequenceNumber uint32 `json:"thread_sequence_number,omitempty"`
 	// Stack trace serial number.
-	StackTraceSequenceNumber uint32   `json:"stack_trace_sequence_number,omitempty"`
+	StackTraceSequenceNumber uint32 `json:"stack_trace_sequence_number,omitempty"`
+
+	POS int64
+}
+
+func (m *HProfRootThreadObj) Id() uint64 {
+	if m != nil {
+		return m.ThreadObjectId
+	}
+	return 0
+}
+
+func (m *HProfRootThreadObj) Type() HProfRecordType {
+	return HProfRecordType(HProfHDRecordTypeRootThreadObj)
+}
+
+func (m *HProfRootThreadObj) Pos() int64 {
+	if m != nil {
+		return m.POS
+	}
+	return 0
 }
 
 func (m *HProfRootThreadObj) GetThreadObjectId() uint64 {
@@ -669,7 +919,19 @@ func (m *HProfRootThreadObj) GetStackTraceSequenceNumber() uint32 {
 // Busy monitor.
 type HProfRootMonitorUsed struct {
 	// Object ID.
-	ObjectId             uint64   `json:"object_id,omitempty"`
+	ObjectId uint64 `json:"object_id,omitempty"`
+}
+
+func (m *HProfRootMonitorUsed) Id() uint64 {
+	return 0
+}
+
+func (m *HProfRootMonitorUsed) Type() HProfRecordType {
+	return HProfHDRecordTypeRootMonitorUsed
+}
+
+func (m *HProfRootMonitorUsed) Pos() int64 {
+	return 0
 }
 
 func (m *HProfRootMonitorUsed) GetObjectId() uint64 {
@@ -683,4 +945,3 @@ type HProfDumpWithSize interface {
 	GetClassObjectId() uint64
 	Size() uint32
 }
-
