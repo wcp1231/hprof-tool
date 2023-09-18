@@ -27,3 +27,11 @@ type StackTrace struct {
 	Frames             []*StackFrame
 	Locals             []*LocalFrame
 }
+
+type Thread struct {
+	ObjectId          uint64
+	NameId            uint64
+	GroupNameId       uint64
+	GroupParentNameId uint64
+	StackTrace        *StackTrace
+}
