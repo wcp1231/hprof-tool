@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"hprof-tool/pkg/model"
 	"hprof-tool/pkg/snapshot"
+	"hprof-tool/pkg/web"
 	"sort"
 )
 
 func main() {
-	s, err := snapshot.NewSnapshot2("./test-dump-file/heap_dump_test.hprof")
+	s, err := snapshot.NewSnapshot("./test-dump-file/heap_dump_test.hprof")
 	if err != nil {
 		panic(err)
 	}
@@ -29,9 +30,11 @@ func main() {
 		panic(err)
 	}
 	printClasses(classes)
+
+	web.NewWebEndpoint(s).Start(":1323")
 }
 
-func printThreads(s *snapshot.Snapshot2, threads map[uint32]*model.Thread) error {
+func printThreads(s *snapshot.Snapshot, threads map[uint32]*model.Thread) error {
 	for id, thread := range threads {
 		name, err := s.GetText(thread.NameId)
 		if err != nil {
@@ -74,19 +77,4 @@ func printClasses(classes []snapshot.ClassStatistics) {
 	for _, c := range classes {
 		fmt.Printf("%s(%d), %d, %d\n", c.Name, c.Id, c.InstanceCount, c.InstanceSize)
 	}
-}
-
-func backup_main() {
-	s, err := snapshot.NewSnapshot("./test-dump-file/heap_dump_test.hprof")
-	if err != nil {
-		panic(err)
-	}
-	err = s.Read()
-	if err != nil {
-		panic(err)
-	}
-
-	classes, err := s.ClassCount()
-	instances, err := s.InstanceCount()
-	fmt.Printf("Classes: %d, Instances: %d, %v\n", classes, instances, err)
 }

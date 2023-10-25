@@ -19,8 +19,18 @@ func (p *InstanceReferencesProcessor) process() error {
 			return err
 		}
 		p.i.ctx.instanceReferences[record.ObjectId] = references
-		return nil
+		return p.saveReferences(record.ObjectId, references)
 	})
+}
+
+func (p *InstanceReferencesProcessor) saveReferences(rid uint64, references []uint64) error {
+	for _, ref := range references {
+		err := p.i.AppendReference(rid, ref, 0) // TODO type
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *InstanceReferencesProcessor) getReferences(instance *hprof.HProfInstanceRecord) ([]uint64, error) {

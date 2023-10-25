@@ -16,8 +16,18 @@ func (p *ClassReferencesProcessor) process() error {
 	return p.i.ForEachClassRecords(func(record *hprof.HProfClassRecord) error {
 		references := p.getReferences(record)
 		p.i.ctx.classReferences[record.ClassObjectId] = references
-		return nil
+		return p.saveReferences(record.ClassObjectId, references)
 	})
+}
+
+func (p *ClassReferencesProcessor) saveReferences(rid uint64, references []uint64) error {
+	for _, ref := range references {
+		err := p.i.AppendReference(rid, ref, 0) // TODO type
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *ClassReferencesProcessor) getReferences(cr *hprof.HProfClassRecord) []uint64 {

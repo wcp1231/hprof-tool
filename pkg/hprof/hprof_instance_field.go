@@ -3,10 +3,12 @@ package hprof
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 )
 
 type HProfInstanceFieldValue interface {
 	ValueType() HProfValueType
+	ValueString() string
 }
 
 // Instance fields.
@@ -21,6 +23,10 @@ func (b *HProfInstanceBasicValue) ValueType() HProfValueType {
 	return b.Type
 }
 
+func (b *HProfInstanceBasicValue) ValueString() string {
+	return "<?>"
+}
+
 type HProfInstanceArrayValue struct {
 	HProfInstanceBasicValue
 }
@@ -28,6 +34,13 @@ type HProfInstanceArrayValue struct {
 type HProfInstanceBooleanValue struct {
 	HProfInstanceBasicValue
 	Value bool
+}
+
+func (b *HProfInstanceBooleanValue) ValueString() string {
+	if b.Value {
+		return "true"
+	}
+	return "false"
 }
 
 func readBooleanValue(reader *bytes.Reader) (*HProfInstanceBooleanValue, error) {
@@ -48,6 +61,10 @@ type HProfInstanceByteValue struct {
 	Value byte
 }
 
+func (b *HProfInstanceByteValue) ValueString() string {
+	return fmt.Sprintf("%d", b.Value)
+}
+
 func readByteValue(reader *bytes.Reader) (*HProfInstanceByteValue, error) {
 	b, err := reader.ReadByte()
 	if err != nil {
@@ -64,6 +81,10 @@ func readByteValue(reader *bytes.Reader) (*HProfInstanceByteValue, error) {
 type HProfInstanceCharValue struct {
 	HProfInstanceBasicValue
 	Value uint16
+}
+
+func (b *HProfInstanceCharValue) ValueString() string {
+	return fmt.Sprintf("%c", b.Value)
 }
 
 func readCharValue(reader *bytes.Reader) (*HProfInstanceCharValue, error) {
@@ -84,6 +105,10 @@ type HProfInstanceDoubleValue struct {
 	Value float64
 }
 
+func (b *HProfInstanceDoubleValue) ValueString() string {
+	return fmt.Sprintf("%f", b.Value)
+}
+
 func readDoubleValue(reader *bytes.Reader) (*HProfInstanceDoubleValue, error) {
 	var v float64
 	if err := binary.Read(reader, binary.BigEndian, &v); err != nil {
@@ -100,6 +125,10 @@ func readDoubleValue(reader *bytes.Reader) (*HProfInstanceDoubleValue, error) {
 type HProfInstanceFloatValue struct {
 	HProfInstanceBasicValue
 	Value float32
+}
+
+func (b *HProfInstanceFloatValue) ValueString() string {
+	return fmt.Sprintf("%f", b.Value)
 }
 
 func readFloatValue(reader *bytes.Reader) (*HProfInstanceFloatValue, error) {
@@ -120,6 +149,10 @@ type HProfInstanceIntValue struct {
 	Value int32
 }
 
+func (b *HProfInstanceIntValue) ValueString() string {
+	return fmt.Sprintf("%d", b.Value)
+}
+
 func readIntValue(reader *bytes.Reader) (*HProfInstanceIntValue, error) {
 	var v int32
 	if err := binary.Read(reader, binary.BigEndian, &v); err != nil {
@@ -136,6 +169,10 @@ func readIntValue(reader *bytes.Reader) (*HProfInstanceIntValue, error) {
 type HProfInstanceLongValue struct {
 	HProfInstanceBasicValue
 	Value int64
+}
+
+func (b *HProfInstanceLongValue) ValueString() string {
+	return fmt.Sprintf("%d", b.Value)
 }
 
 func readLongValue(reader *bytes.Reader) (*HProfInstanceLongValue, error) {
@@ -156,6 +193,13 @@ type HProfInstanceObjectValue struct {
 	Value uint64
 }
 
+func (b *HProfInstanceObjectValue) ValueString() string {
+	if b.Value == 0 {
+		return "null"
+	}
+	return fmt.Sprintf("0x%X", b.Value)
+}
+
 func readObjectValue(reader *bytes.Reader) (*HProfInstanceObjectValue, error) {
 	var v uint64
 	if err := binary.Read(reader, binary.BigEndian, &v); err != nil {
@@ -174,6 +218,10 @@ type HProfInstanceShortValue struct {
 	Value int16
 }
 
+func (b *HProfInstanceShortValue) ValueString() string {
+	return fmt.Sprintf("%d", b.Value)
+}
+
 func readShortValue(reader *bytes.Reader) (*HProfInstanceShortValue, error) {
 	var v int16
 	if err := binary.Read(reader, binary.BigEndian, &v); err != nil {
@@ -189,4 +237,8 @@ func readShortValue(reader *bytes.Reader) (*HProfInstanceShortValue, error) {
 
 type HProfInstanceUnknownValue struct {
 	HProfInstanceBasicValue
+}
+
+func (b *HProfInstanceUnknownValue) ValueString() string {
+	return "<?>"
 }

@@ -2,9 +2,9 @@ package indexer
 
 import (
 	"fmt"
-	"hprof-tool/pkg/db"
 	"hprof-tool/pkg/hprof"
 	"hprof-tool/pkg/model"
+	"hprof-tool/pkg/storage"
 )
 
 const (
@@ -19,12 +19,12 @@ var PRIMITIVE_TYPE_ARRAY = []string{"", "", "", "",
 
 type Indexer struct {
 	hreader *hprof.HProfReader
-	storage *db.SqliteStorage
+	storage storage.Storage
 
 	ctx *HeapContext
 }
 
-func NewSqliteIndexer(hreader *hprof.HProfReader, storage *db.SqliteStorage) *Indexer {
+func NewSqliteIndexer(hreader *hprof.HProfReader, storage storage.Storage) *Indexer {
 	return &Indexer{
 		hreader: hreader,
 		storage: storage,
@@ -233,4 +233,142 @@ func (i *Indexer) GetClassesStatistics(fn func(cid uint64, cname string, count, 
 		name := PRIMITIVE_TYPE_ARRAY[ty]
 		return fn(ty, name, count, size)
 	})
+}
+
+func (i *Indexer) AppendReference(from, to uint64, typ int) error {
+	return i.storage.AppendReference(from, to, typ)
+}
+
+func (i *Indexer) GetInstanceDetail(oid uint64) (*Instance, error) {
+	instanceRecord, err := i.getInstance(oid)
+	if err != nil {
+		return nil, err
+	}
+	class, err := i.getClassById(instanceRecord.ClassObjectId)
+	if err != nil {
+		return nil, err
+	}
+	classes, err := i.resolveClassHierarchy(class)
+	if err != nil {
+		return nil, err
+	}
+	instanceFields := []*hprof.HProfClass_InstanceField{}
+	for _, class := range classes {
+		instanceFields = append(instanceFields, class.InstanceFields...)
+	}
+	fiedValues, err := instanceRecord.ReadValues(instanceFields)
+	if err != nil {
+		return nil, err
+	}
+	var fields []*InstanceField
+	for idx, field := range instanceFields {
+		name, err := i.GetText(field.NameId)
+		if err != nil {
+			return nil, err
+		}
+		var refrence *Instance = nil
+		if field.Type == hprof.HProfValueType_OBJECT {
+			refrence, err = i.GetInstanceDetail(fiedValues[idx].(*hprof.HProfInstanceObjectValue).Value)
+		}
+		fields = append(fields, &InstanceField{
+			Name:      name,
+			Type:      hprof.HProfValueType_name[field.Type],
+			Value:     fiedValues[idx].ValueString(),
+			Reference: refrence,
+		})
+	}
+	className := i.ctx.classId2Name[instanceRecord.ClassObjectId]
+	instance := &Instance{
+		Id:     instanceRecord.ObjectId,
+		Class:  className,
+		Fields: fields,
+	}
+	return instance, nil
+}
+
+func (i *Indexer) GetInstancesStatistics(cid uint64, typ int, fn func(id uint64, size int64) error) error {
+	if typ == hprof.HProfHDRecordTypeObjectArrayDump {
+		return i.storage.ListObjectArrayByClass(cid, func(id uint64, pos, size int64) error {
+			return fn(id, size)
+		})
+	}
+	if typ == hprof.HProfHDRecordTypePrimitiveArrayDump {
+		return i.storage.ListPrimitiveArrayByClass(cid, func(id uint64, pos, size int64) error {
+			return fn(id, size)
+		})
+	}
+	return i.storage.ListInstancesByClass(cid, func(id uint64, pos, size int64) error {
+		return fn(id, size)
+	})
+}
+
+// GetRecordInbounds 列出当前 record 的来源 reference
+func (i *Indexer) GetRecordInbounds(id uint64, fn func(record hprof.HProfRecord) error) error {
+	return i.storage.ListInboundReferences(id, func(from uint64, typ int) error {
+		record, err := i.getRecord(from)
+		if err != nil {
+			return err
+		}
+		return fn(record)
+	})
+}
+
+// GetRecordOutbounds 列出当前 record 的来源 reference
+func (i *Indexer) GetRecordOutbounds(id uint64, fn func(record hprof.HProfRecord) error) error {
+	return i.storage.ListOutboundReferences(id, func(to uint64, typ int) error {
+		record, err := i.getRecord(to)
+		if err != nil {
+			return err
+		}
+		return fn(record)
+	})
+}
+
+func (i *Indexer) getInstance(oid uint64) (*hprof.HProfInstanceRecord, error) {
+	pos, err := i.storage.GetInstanceById(oid)
+	if err != nil {
+		return nil, err
+	}
+	return hprof.ReadHProfInstanceRecordWithPos(i.hreader, pos)
+}
+
+func (i *Indexer) getRecord(id uint64) (hprof.HProfRecord, error) {
+	pos, typ, cla, err := i.storage.GetRecordById(id)
+	if err != nil {
+		return nil, err
+	}
+	if cla != nil {
+		return cla, nil
+	}
+	switch typ {
+	case hprof.HProfHDRecordTypeClassDump:
+		return hprof.ReadHProfClassRecordWithPos(i.hreader, pos)
+	case hprof.HProfHDRecordTypeInstanceDump:
+		return hprof.ReadHProfInstanceRecordWithPos(i.hreader, pos)
+	case hprof.HProfHDRecordTypeObjectArrayDump:
+		return hprof.ReadHProfObjectArrayRecordWithPos(i.hreader, pos)
+	case hprof.HProfHDRecordTypePrimitiveArrayDump:
+		return hprof.ReadHProfPrimitiveArrayRecordWithPos(i.hreader, pos)
+	default:
+		return nil, fmt.Errorf("unknown record type: %d", typ)
+	}
+}
+
+func (i *Indexer) resolveClassHierarchy(class *hprof.HProfClassRecord) ([]*hprof.HProfClassRecord, error) {
+	var classes []*hprof.HProfClassRecord
+	classes = append(classes, class)
+	c := class
+	var err error
+	for {
+		if c.SuperClassObjectId == 0 {
+			break
+		}
+		c, err = i.getClassById(c.SuperClassObjectId)
+		if err != nil {
+			return nil, err
+		}
+		classes = append(classes, c)
+	}
+
+	return classes, nil
 }

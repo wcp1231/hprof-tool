@@ -2,19 +2,16 @@ package snapshot
 
 import (
 	"fmt"
+	"hprof-tool/pkg/hprof"
+	"hprof-tool/pkg/indexer"
 	"hprof-tool/pkg/model"
-	"hprof-tool/pkg/parser"
 	"hprof-tool/pkg/storage"
 	"os"
+	"sort"
 )
 
 type Snapshot struct {
-	hFile *os.File
-
-	parser  *parser.HProfParser
-	storage storage.Storage
-
-	header *parser.HProfHeader
+	i *indexer.Indexer
 }
 
 func NewSnapshot(fileName string) (*Snapshot, error) {
@@ -22,6 +19,7 @@ func NewSnapshot(fileName string) (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
+	hreader := hprof.NewReader(hFile)
 
 	s, err := storage.NewSqliteStorage(":memory:")
 	if err != nil {
@@ -34,63 +32,70 @@ func NewSnapshot(fileName string) (*Snapshot, error) {
 		return nil, err
 	}
 
-	return &Snapshot{
-		hFile: hFile,
+	i := indexer.NewSqliteIndexer(hreader, s)
 
-		parser:  parser.NewParser(hFile),
-		storage: s,
-	}, nil
+	return &Snapshot{i}, nil
 }
 
-// Read 分阶段读取 HProf 文件
-func (s *Snapshot) Read() error {
-	err := s.firstProcess()
+func (s *Snapshot) EnsureCreateIndex() error {
+	// TODO 判断 sqlite 是否有数据
+	err := s.i.CreateIndex()
 	if err != nil {
 		return err
 	}
+	println("CreateIndex done")
 
-	err = s.secondProcess()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.i.Processor()
 }
 
-func (s *Snapshot) firstProcess() error {
-	firstProcess := NewFirstProcessor(s, s.parser)
-	err := firstProcess.Process()
-	if err != nil {
-		return err
-	}
-	return nil
+// GetThreads 返回线程信息
+func (s *Snapshot) GetThreads() map[uint32]*model.Thread {
+	return s.i.GetThreads()
 }
 
-func (s *Snapshot) secondProcess() error {
-
-	return nil
+func (s *Snapshot) GetText(tId uint64) (string, error) {
+	return s.i.GetText(tId)
 }
 
-func (s *Snapshot) ForEachClass(fn func(dump *model.HProfClassDump) error) error {
-	return s.storage.ListClasses(func(classDump *model.HProfClassDump) error {
-		err := s.parser.Seek(classDump.POS)
-		if err != nil {
-			return err
-		}
-		result, err := s.parser.ParseClassDumpRecord()
-		if err != nil {
-			return err
-		}
-		return fn(result)
+func (s *Snapshot) GetClassNameByClassSerialNumber(csn uint64) (string, error) {
+	return s.i.GetClassNameByClassSerialNumber(csn)
+}
+
+func (s *Snapshot) ListClassesStatistics() ([]ClassStatistics, error) {
+	var result []ClassStatistics
+	err := s.i.GetClassesStatistics(func(cid uint64, cname string, count, size int64) error {
+		result = append(result, ClassStatistics{
+			Id:            cid,
+			Name:          cname,
+			InstanceCount: count,
+			InstanceSize:  size,
+		})
+		return nil
 	})
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].InstanceCount == result[j].InstanceCount {
+			return result[i].InstanceSize > result[j].InstanceSize
+		}
+		return result[i].InstanceCount > result[j].InstanceCount
+	})
+	return result, err
 }
 
-func (s *Snapshot) ClassCount() (int, error) {
-	st := s.storage.(*storage.SqliteStorage)
-	return st.CountClasses()
+func (s *Snapshot) ListInstancesStatistics(cid uint64, typ int) ([]InstanceStatistics, error) {
+	var result []InstanceStatistics
+	err := s.i.GetInstancesStatistics(cid, typ, func(cid uint64, size int64) error {
+		result = append(result, InstanceStatistics{
+			Id:   cid,
+			Size: size,
+		})
+		return nil
+	})
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Size > result[j].Size
+	})
+	return result, err
 }
 
-func (s *Snapshot) InstanceCount() (int, error) {
-	st := s.storage.(*storage.SqliteStorage)
-	return st.CountInstances()
+func (s *Snapshot) GetInstanceDetail(id uint64) (*indexer.Instance, error) {
+	return s.i.GetInstanceDetail(id)
 }

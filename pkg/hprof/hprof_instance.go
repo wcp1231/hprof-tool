@@ -30,6 +30,7 @@ func (m *HProfInstanceRecord) Type() HProfRecordType {
 func (m *HProfInstanceRecord) Size() uint32 {
 	//return uint32(8 + 4 + 8 + 4 + len(m.Values))
 	return uint32(len(m.Values) + 16) // TODO 空 instance 大小是 16 还是 0 ？
+	// TODO 会调整大小，变成 8 的整数倍，得确认具体逻辑
 }
 
 func (m *HProfInstanceRecord) ReadValues(fields []*HProfClass_InstanceField) ([]HProfInstanceFieldValue, error) {

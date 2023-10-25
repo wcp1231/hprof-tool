@@ -6,3 +6,8 @@ type ClassStatistics struct {
 	InstanceCount int64
 	InstanceSize  int64
 }
+
+type InstanceStatistics struct {
+	Id   uint64
+	Size int64
+}

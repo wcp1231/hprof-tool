@@ -49,10 +49,10 @@ const (
 	HProfHDRecordTypeRootMonitorUsed                   = 0x07
 	HProfHDRecordTypeRootThreadObj                     = 0x08
 
-	HProfHDRecordTypeClassDump          HProfHDRecordType = 0x20
-	HProfHDRecordTypeInstanceDump                         = 0x21
-	HProfHDRecordTypeObjectArrayDump                      = 0x22
-	HProfHDRecordTypePrimitiveArrayDump                   = 0x23
+	HProfHDRecordTypeClassDump          = 0x20
+	HProfHDRecordTypeInstanceDump       = 0x21
+	HProfHDRecordTypeObjectArrayDump    = 0x22
+	HProfHDRecordTypePrimitiveArrayDump = 0x23
 )
 
 type HProfValueType int32

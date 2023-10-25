@@ -59,3 +59,11 @@ func ReadHProfObjectArrayRecord(pr *HProfReader) (*HProfObjectArrayRecord, error
 		ElementObjectIds:       vs,
 	}, nil
 }
+
+func ReadHProfObjectArrayRecordWithPos(pr *HProfReader, pos int64) (*HProfObjectArrayRecord, error) {
+	err := pr.Seek(pos)
+	if err != nil {
+		return nil, err
+	}
+	return ReadHProfObjectArrayRecord(pr)
+}

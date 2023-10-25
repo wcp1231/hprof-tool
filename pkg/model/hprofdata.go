@@ -8,6 +8,7 @@ type HProfRecord interface {
 	Id() uint64
 	Type() HProfRecordType
 	Pos() int64
+	Len() int
 }
 
 type HProfObjectRecord interface {
@@ -23,6 +24,7 @@ type HProfRecordUTF8 struct {
 	Name   []byte `json:"name,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfRecordUTF8) Id() uint64 {
@@ -39,6 +41,13 @@ func (m *HProfRecordUTF8) Type() HProfRecordType {
 func (m *HProfRecordUTF8) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfRecordUTF8) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -63,6 +72,7 @@ type HProfRecordLoadClass struct {
 	ClassNameId uint64 `json:"class_name_id,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfRecordLoadClass) Id() uint64 {
@@ -79,6 +89,13 @@ func (m *HProfRecordLoadClass) Type() HProfRecordType {
 func (m *HProfRecordLoadClass) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfRecordLoadClass) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -127,6 +144,7 @@ type HProfRecordFrame struct {
 	LineNumber int32 `json:"line_number,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfRecordFrame) Id() uint64 {
@@ -143,6 +161,13 @@ func (m *HProfRecordFrame) Type() HProfRecordType {
 func (m *HProfRecordFrame) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfRecordFrame) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -199,6 +224,7 @@ type HProfRecordTrace struct {
 	StackFrameIds []uint64 `json:"stack_frame_ids,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfRecordTrace) Id() uint64 {
@@ -215,6 +241,13 @@ func (m *HProfRecordTrace) Type() HProfRecordType {
 func (m *HProfRecordTrace) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfRecordTrace) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -254,6 +287,10 @@ func (m *HProfRecordHeapDumpBoundary) Pos() int64 {
 	return 0
 }
 
+func (m *HProfRecordHeapDumpBoundary) Len() int {
+	return 0
+}
+
 // Class data dump.
 type HProfClassDump struct {
 	// Class object ID.
@@ -275,6 +312,7 @@ type HProfClassDump struct {
 	InstanceFields      []*HProfClassDump_InstanceField     `json:"instance_fields,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfClassDump) Id() uint64 {
@@ -291,6 +329,13 @@ func (m *HProfClassDump) Type() HProfRecordType {
 func (m *HProfClassDump) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfClassDump) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -486,6 +531,7 @@ type HProfInstanceDump struct {
 	Values []byte `json:"values,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfInstanceDump) Id() uint64 {
@@ -502,6 +548,13 @@ func (m *HProfInstanceDump) Type() HProfRecordType {
 func (m *HProfInstanceDump) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfInstanceDump) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -555,6 +608,7 @@ type HProfObjectArrayDump struct {
 	ElementObjectIds []uint64 `json:"element_object_ids,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfObjectArrayDump) Id() uint64 {
@@ -571,6 +625,13 @@ func (m *HProfObjectArrayDump) Type() HProfRecordType {
 func (m *HProfObjectArrayDump) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfObjectArrayDump) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -629,6 +690,7 @@ type HProfPrimitiveArrayDump struct {
 	Values []byte `json:"values,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfPrimitiveArrayDump) Id() uint64 {
@@ -645,6 +707,13 @@ func (m *HProfPrimitiveArrayDump) Type() HProfRecordType {
 func (m *HProfPrimitiveArrayDump) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfPrimitiveArrayDump) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -696,6 +765,7 @@ type HProfRootJNIGlobal struct {
 	JniGlobalRefId uint64 `json:"jni_global_ref_id,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfRootJNIGlobal) Id() uint64 {
@@ -712,6 +782,13 @@ func (m *HProfRootJNIGlobal) Type() HProfRecordType {
 func (m *HProfRootJNIGlobal) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfRootJNIGlobal) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -740,6 +817,7 @@ type HProfRootJNILocal struct {
 	FrameNumberInStackTrace uint32 `json:"frame_number_in_stack_trace,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfRootJNILocal) Id() uint64 {
@@ -756,6 +834,13 @@ func (m *HProfRootJNILocal) Type() HProfRecordType {
 func (m *HProfRootJNILocal) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfRootJNILocal) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -791,6 +876,7 @@ type HProfRootJavaFrame struct {
 	FrameNumberInStackTrace uint32 `json:"frame_number_in_stack_trace,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfRootJavaFrame) Id() uint64 {
@@ -807,6 +893,13 @@ func (m *HProfRootJavaFrame) Type() HProfRecordType {
 func (m *HProfRootJavaFrame) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfRootJavaFrame) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -838,6 +931,7 @@ type HProfRootStickyClass struct {
 	ObjectId uint64 `json:"object_id,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfRootStickyClass) Id() uint64 {
@@ -854,6 +948,13 @@ func (m *HProfRootStickyClass) Type() HProfRecordType {
 func (m *HProfRootStickyClass) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfRootStickyClass) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -875,6 +976,7 @@ type HProfRootThreadObj struct {
 	StackTraceSequenceNumber uint32 `json:"stack_trace_sequence_number,omitempty"`
 
 	POS int64
+	LEN int
 }
 
 func (m *HProfRootThreadObj) Id() uint64 {
@@ -891,6 +993,13 @@ func (m *HProfRootThreadObj) Type() HProfRecordType {
 func (m *HProfRootThreadObj) Pos() int64 {
 	if m != nil {
 		return m.POS
+	}
+	return 0
+}
+
+func (m *HProfRootThreadObj) Len() int {
+	if m != nil {
+		return m.LEN
 	}
 	return 0
 }
@@ -931,6 +1040,13 @@ func (m *HProfRootMonitorUsed) Type() HProfRecordType {
 }
 
 func (m *HProfRootMonitorUsed) Pos() int64 {
+	return 0
+}
+
+func (m *HProfRootMonitorUsed) Len() int {
+	if m != nil {
+		return 0
+	}
 	return 0
 }
 

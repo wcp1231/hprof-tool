@@ -52,3 +52,11 @@ func ReadHProfPrimitiveArrayRecord(pr *HProfReader) (*HProfPrimitiveArrayRecord,
 		Values:                 bs,
 	}, nil
 }
+
+func ReadHProfPrimitiveArrayRecordWithPos(pr *HProfReader, pos int64) (*HProfPrimitiveArrayRecord, error) {
+	err := pr.Seek(pos)
+	if err != nil {
+		return nil, err
+	}
+	return ReadHProfPrimitiveArrayRecord(pr)
+}
