@@ -25,7 +25,7 @@ func (p *InstanceReferencesProcessor) process() error {
 
 func (p *InstanceReferencesProcessor) saveReferences(rid uint64, references []uint64) error {
 	for _, ref := range references {
-		err := p.i.AppendReference(rid, ref, 0) // TODO type
+		err := p.i.AppendReference(rid, ref, hprof.HProfHDRecordTypeInstanceDump)
 		if err != nil {
 			return err
 		}

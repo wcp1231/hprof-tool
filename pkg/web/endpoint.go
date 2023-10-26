@@ -2,6 +2,7 @@ package web
 
 import (
 	"github.com/labstack/echo/v4"
+	"hprof-tool/pkg/hprof"
 	"hprof-tool/pkg/snapshot"
 	"strconv"
 )
@@ -69,6 +70,22 @@ func (w *WebEndpoint) initEndpoints() {
 			}{Error: err.Error()})
 		}
 		return c.JSON(200, instance)
+	})
+	g.GET("/references/:id/inbound", func(c echo.Context) error {
+		idStr := c.Param("id")
+		id, _ := strconv.ParseUint(idStr, 10, 64)
+
+		var result []hprof.HProfRecord
+		err := w.s.GetRecordInbound(id, func(record hprof.HProfRecord) error {
+			result = append(result, record)
+			return nil
+		})
+		if err != nil {
+			return c.JSON(500, struct {
+				Error string `json:"error"`
+			}{Error: err.Error()})
+		}
+		return c.JSON(200, result)
 	})
 }
 

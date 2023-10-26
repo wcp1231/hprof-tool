@@ -22,7 +22,7 @@ func (p *ClassReferencesProcessor) process() error {
 
 func (p *ClassReferencesProcessor) saveReferences(rid uint64, references []uint64) error {
 	for _, ref := range references {
-		err := p.i.AppendReference(rid, ref, 0) // TODO type
+		err := p.i.AppendReference(rid, ref, hprof.HProfHDRecordTypeClassDump)
 		if err != nil {
 			return err
 		}

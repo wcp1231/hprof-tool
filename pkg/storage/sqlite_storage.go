@@ -245,13 +245,14 @@ func (s *SqliteStorage) ListClasses(fn func(id uint64, pos int64, cla *hprof.HPr
 	var id uint64
 	var pos int64
 	var raw []byte
-	cla := &hprof.HProfClassRecord{}
 	for rows.Next() {
+		var cla *hprof.HProfClassRecord = nil
 		err = rows.Scan(&id, &pos, &raw)
 		if err != nil {
 			return err
 		}
 		if raw != nil {
+			cla = &hprof.HProfClassRecord{}
 			err = decodeGob(raw, cla)
 			if err != nil {
 				return err
@@ -585,13 +586,15 @@ func (s *SqliteStorage) ListThreadFrames(fn func(r *hprof.HProfFrameRecord) erro
 
 // AppendReference 添加引用关系
 func (s *SqliteStorage) AppendReference(from, to uint64, typ int) error {
-	_, err := s.db.Exec("INSERT INTO referneces (`from`, `to`, `type`) VALUES (?, ?, ?)", from, to, typ)
+	r, err := s.db.Exec("INSERT INTO referneces (`from`, `to`, `type`) VALUES (?, ?, ?)", from, to, typ)
+	n, e := r.RowsAffected()
+	fmt.Printf("%d %d\n", n, e)
 	return err
 }
 
 // ListInboundReferences 列出指向当前对象 id 的其他对象 id
 func (s *SqliteStorage) ListInboundReferences(rid uint64, fn func(from uint64, typ int) error) error {
-	rows, err := s.db.Query("SELECT `from`, `type` FROM references WHERE `to`=?", rid)
+	rows, err := s.db.Query("SELECT `from`, `type` FROM referneces WHERE `to`=?", rid)
 	if err != nil {
 		return err
 	}
