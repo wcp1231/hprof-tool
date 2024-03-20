@@ -235,6 +235,69 @@ func (i *Indexer) GetClassesStatistics(fn func(cid uint64, cname string, count, 
 	})
 }
 
+func (i *Indexer) GetClassDetail(cid uint64) (*Class, error) {
+	class, err := i.getClassById(cid)
+	if err != nil {
+		return nil, err
+	}
+
+	//classerLoader, err := i.GetInstanceDetail(class.ClassLoaderObjectId)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	var constantPoolEntries []*ConstantPoolEntry
+	for _, entry := range class.ConstantPoolEntries {
+		constantPoolEntries = append(constantPoolEntries, &ConstantPoolEntry{
+			Index: entry.ConstantPoolIndex,
+			Type:  hprof.HProfValueType_name[entry.Type],
+			Value: entry.Value,
+		})
+
+	}
+
+	var staticFields []*StaticField
+	for _, field := range class.StaticFields {
+		name, err := i.GetText(field.NameId)
+		if err != nil {
+			return nil, err
+		}
+		staticFields = append(staticFields, &StaticField{
+			Name:  name,
+			Type:  hprof.HProfValueType_name[field.Type],
+			Value: field.Value,
+		})
+	}
+
+	var instanceFields []*InstanceField
+	for _, field := range class.InstanceFields {
+		name, err := i.GetText(field.NameId)
+		if err != nil {
+			return nil, err
+		}
+		instanceFields = append(instanceFields, &InstanceField{
+			Name: name,
+			Type: hprof.HProfValueType_name[field.Type],
+		})
+
+	}
+
+	className := i.ctx.classId2Name[cid]
+	return &Class{
+		Id:                       class.ClassObjectId,
+		LoaderObjectId:           class.ClassLoaderObjectId,
+		SuperClassId:             class.SuperClassObjectId,
+		StackTraceSerialNumber:   class.StackTraceSerialNumber,
+		SignersObjectId:          class.SignersObjectId,
+		Name:                     className,
+		ProtectionDomainObjectId: class.ProtectionDomainObjectId,
+		InstanceSize:             class.InstanceSize,
+		ConstantPoolEntries:      constantPoolEntries,
+		StaticFields:             staticFields,
+		InstanceFields:           instanceFields,
+	}, nil
+}
+
 func (i *Indexer) AppendReference(from, to uint64, typ int) error {
 	return i.storage.AppendReference(from, to, typ)
 }

@@ -37,6 +37,17 @@ func (w *WebEndpoint) initEndpoints() {
 		}
 		return c.JSON(200, classes)
 	})
+	g.GET("/classes/:id", func(c echo.Context) error {
+		idStr := c.Param("id")
+		id, _ := strconv.ParseUint(idStr, 10, 64)
+		classes, err := w.s.GetClassDetail(id)
+		if err != nil {
+			return c.JSON(500, struct {
+				Error string `json:"error"`
+			}{Error: err.Error()})
+		}
+		return c.JSON(200, classes)
+	})
 	g.GET("/classes/:id/instances", func(c echo.Context) error {
 		idStr := c.Param("id")
 		id, _ := strconv.ParseUint(idStr, 10, 64)
@@ -77,6 +88,19 @@ func (w *WebEndpoint) initEndpoints() {
 
 		var result []hprof.HProfRecord
 		err := w.s.GetRecordInbound(id, func(record hprof.HProfRecord) error {
+			result = append(result, record)
+			return nil
+		})
+		if err != nil {
+			return c.JSON(500, struct {
+				Error string `json:"error"`
+			}{Error: err.Error()})
+		}
+		return c.JSON(200, result)
+	})
+	g.GET("/gc_roots/", func(c echo.Context) error {
+		var result []hprof.HProfRecord
+		err := w.s.GetGCRoots(func(record hprof.HProfRecord) error {
 			result = append(result, record)
 			return nil
 		})

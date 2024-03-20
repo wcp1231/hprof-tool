@@ -96,10 +96,18 @@ func (s *Snapshot) ListInstancesStatistics(cid uint64, typ int) ([]InstanceStati
 	return result, err
 }
 
+func (s *Snapshot) GetClassDetail(id uint64) (*indexer.Class, error) {
+	return s.i.GetClassDetail(id)
+}
+
 func (s *Snapshot) GetInstanceDetail(id uint64) (*indexer.Instance, error) {
 	return s.i.GetInstanceDetail(id)
 }
 
 func (s *Snapshot) GetRecordInbound(id uint64, fn func(record hprof.HProfRecord) error) error {
 	return s.i.GetRecordInbounds(id, fn)
+}
+
+func (s *Snapshot) GetGCRoots(fn func(record hprof.HProfRecord) error) error {
+	return s.i.ForEachGCRoots(fn)
 }

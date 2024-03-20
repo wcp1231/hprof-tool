@@ -16,7 +16,7 @@ func newGCRootProcessor(i *Indexer) *GCRootsProcessor {
 
 func (p *GCRootsProcessor) process() error {
 	println("GCRootsProcessor start")
-	p.i.ForEachGCRoots(func(r hprof.HProfRecord) error {
+	return p.i.ForEachGCRoots(func(r hprof.HProfRecord) error {
 		switch r.(type) {
 		case *hprof.HProfRootJNIGlobal:
 			p.onRootJNIGlobalRecord(r.(*hprof.HProfRootJNIGlobal))
@@ -35,7 +35,6 @@ func (p *GCRootsProcessor) process() error {
 		}
 		return nil
 	})
-	return nil
 }
 
 func (p *GCRootsProcessor) onRootJNIGlobalRecord(r *hprof.HProfRootJNIGlobal) {
