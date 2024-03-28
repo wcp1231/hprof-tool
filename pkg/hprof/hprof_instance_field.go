@@ -94,7 +94,7 @@ func readCharValue(reader *bytes.Reader) (*HProfInstanceCharValue, error) {
 	}
 	return &HProfInstanceCharValue{
 		HProfInstanceBasicValue: HProfInstanceBasicValue{
-			Type: HProfValueType_BYTE,
+			Type: HProfValueType_CHAR,
 		},
 		Value: v,
 	}, nil
@@ -116,7 +116,7 @@ func readDoubleValue(reader *bytes.Reader) (*HProfInstanceDoubleValue, error) {
 	}
 	return &HProfInstanceDoubleValue{
 		HProfInstanceBasicValue: HProfInstanceBasicValue{
-			Type: HProfValueType_BYTE,
+			Type: HProfValueType_DOUBLE,
 		},
 		Value: v,
 	}, nil
@@ -138,7 +138,7 @@ func readFloatValue(reader *bytes.Reader) (*HProfInstanceFloatValue, error) {
 	}
 	return &HProfInstanceFloatValue{
 		HProfInstanceBasicValue: HProfInstanceBasicValue{
-			Type: HProfValueType_BYTE,
+			Type: HProfValueType_FLOAT,
 		},
 		Value: v,
 	}, nil
@@ -160,7 +160,7 @@ func readIntValue(reader *bytes.Reader) (*HProfInstanceIntValue, error) {
 	}
 	return &HProfInstanceIntValue{
 		HProfInstanceBasicValue: HProfInstanceBasicValue{
-			Type: HProfValueType_BYTE,
+			Type: HProfValueType_INT,
 		},
 		Value: v,
 	}, nil
@@ -182,7 +182,7 @@ func readLongValue(reader *bytes.Reader) (*HProfInstanceLongValue, error) {
 	}
 	return &HProfInstanceLongValue{
 		HProfInstanceBasicValue: HProfInstanceBasicValue{
-			Type: HProfValueType_BYTE,
+			Type: HProfValueType_LONG,
 		},
 		Value: v,
 	}, nil
@@ -207,7 +207,7 @@ func readObjectValue(reader *bytes.Reader) (*HProfInstanceObjectValue, error) {
 	}
 	return &HProfInstanceObjectValue{
 		HProfInstanceBasicValue: HProfInstanceBasicValue{
-			Type: HProfValueType_BYTE,
+			Type: HProfValueType_OBJECT,
 		},
 		Value: v,
 	}, nil
@@ -229,7 +229,7 @@ func readShortValue(reader *bytes.Reader) (*HProfInstanceShortValue, error) {
 	}
 	return &HProfInstanceShortValue{
 		HProfInstanceBasicValue: HProfInstanceBasicValue{
-			Type: HProfValueType_BYTE,
+			Type: HProfValueType_SHORT,
 		},
 		Value: v,
 	}, nil
