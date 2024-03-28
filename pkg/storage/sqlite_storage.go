@@ -66,15 +66,15 @@ CREATE TABLE IF NOT EXISTS thread_frames (
 	'raw' BLOB NOT NULL
 );
 -- 记录引用关系
-CREATE TABLE IF NOT EXISTS referneces (
+CREATE TABLE IF NOT EXISTS 'links' (
     id INTEGER PRIMARY KEY,
     'from' INTEGER NOT NULL,
 	'to' NTEGER NOT NULL,
 	-- 引用类型？
 	'type' INTEGER NOT NULL
 );
-CREATE INDEX references_from_idx ON referneces ('from');
-CREATE INDEX references_to_idx ON referneces ('to');
+CREATE INDEX links_from_idx ON links ('from');
+CREATE INDEX links_to_idx ON links ('to');
 `, "'", "`")
 
 type SqliteStorage struct {
@@ -586,15 +586,14 @@ func (s *SqliteStorage) ListThreadFrames(fn func(r *hprof.HProfFrameRecord) erro
 
 // AppendReference 添加引用关系
 func (s *SqliteStorage) AppendReference(from, to uint64, typ int) error {
-	r, err := s.db.Exec("INSERT INTO referneces (`from`, `to`, `type`) VALUES (?, ?, ?)", from, to, typ)
-	n, e := r.RowsAffected()
-	fmt.Printf("%d %d\n", n, e)
+	r, err := s.db.Exec("INSERT INTO links (`from`, `to`, `type`) VALUES (?, ?, ?)", from, to, typ)
+	_, err = r.RowsAffected()
 	return err
 }
 
 // ListInboundReferences 列出指向当前对象 id 的其他对象 id
 func (s *SqliteStorage) ListInboundReferences(rid uint64, fn func(from uint64, typ int) error) error {
-	rows, err := s.db.Query("SELECT `from`, `type` FROM referneces WHERE `to`=?", rid)
+	rows, err := s.db.Query("SELECT `from`, `type` FROM links WHERE `to`=?", rid)
 	if err != nil {
 		return err
 	}
@@ -616,7 +615,7 @@ func (s *SqliteStorage) ListInboundReferences(rid uint64, fn func(from uint64, t
 
 // ListOutboundReferences 列出从当前对象 id 指向的其他对象 id
 func (s *SqliteStorage) ListOutboundReferences(rid uint64, fn func(to uint64, typ int) error) error {
-	rows, err := s.db.Query("SELECT `to`, `type` FROM references WHERE `from`=?", rid)
+	rows, err := s.db.Query("SELECT `to`, `type` FROM links WHERE `from`=?", rid)
 	if err != nil {
 		return err
 	}
