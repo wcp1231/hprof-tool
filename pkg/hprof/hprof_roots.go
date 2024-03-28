@@ -10,6 +10,10 @@ type HProfRootJNIGlobal struct {
 	JniGlobalRefId uint64
 }
 
+func (m *HProfRootJNIGlobal) Id() uint64 {
+	return m.ObjectId
+}
+
 func (m *HProfRootJNIGlobal) Type() HProfRecordType {
 	return HProfRecordType(HProfHDRecordTypeRootJNIGlobal)
 }
@@ -50,6 +54,10 @@ type HProfRootJNILocal struct {
 	ThreadSerialNumber uint32 `json:"thread_serial_number,omitempty"`
 	// Frame number in the trace.
 	FrameNumberInStackTrace uint32 `json:"frame_number_in_stack_trace,omitempty"`
+}
+
+func (m *HProfRootJNILocal) Id() uint64 {
+	return m.ObjectId
 }
 
 func (m *HProfRootJNILocal) Type() HProfRecordType {
@@ -99,6 +107,10 @@ type HProfRootJavaFrame struct {
 	FrameNumberInStackTrace uint32 `json:"frame_number_in_stack_trace,omitempty"`
 }
 
+func (m *HProfRootJavaFrame) Id() uint64 {
+	return m.ObjectId
+}
+
 func (m *HProfRootJavaFrame) Type() HProfRecordType {
 	return HProfRecordType(HProfHDRecordTypeRootJavaFrame)
 }
@@ -142,6 +154,10 @@ type HProfRootStickyClass struct {
 	ObjectId uint64 `json:"object_id,omitempty"`
 }
 
+func (m *HProfRootStickyClass) Id() uint64 {
+	return m.ObjectId
+}
+
 func (m *HProfRootStickyClass) Type() HProfRecordType {
 	return HProfRecordType(HProfHDRecordTypeRootStickyClass)
 }
@@ -177,6 +193,10 @@ type HProfRootThreadObj struct {
 	ThreadSequenceNumber uint32 `json:"thread_sequence_number,omitempty"`
 	// Stack trace serial number.
 	StackTraceSequenceNumber uint32 `json:"stack_trace_sequence_number,omitempty"`
+}
+
+func (m *HProfRootThreadObj) Id() uint64 {
+	return m.ThreadObjectId
 }
 
 func (m *HProfRootThreadObj) Type() HProfRecordType {
@@ -221,17 +241,24 @@ type HProfRootMonitorUsed struct {
 	ObjectId uint64 `json:"object_id,omitempty"`
 }
 
+func (m *HProfRootMonitorUsed) Id() uint64 {
+	return m.ObjectId
+}
+
 func (m *HProfRootMonitorUsed) Type() HProfRecordType {
 	return HProfHDRecordTypeRootMonitorUsed
 }
 
 func ReadHProfRootMonitorUsed(pr *HProfReader) (*HProfRootMonitorUsed, error) {
+	pos := pr.pos
 	oid, err := pr.readID()
 	if err != nil {
 		return nil, err
 	}
+	size := int(pr.pos - pos)
 	return &HProfRootMonitorUsed{
-		ObjectId: oid,
+		HProfBasicRecord: HProfBasicRecord{pos, size},
+		ObjectId:         oid,
 	}, nil
 }
 

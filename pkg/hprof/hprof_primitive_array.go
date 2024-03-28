@@ -17,6 +17,13 @@ type HProfPrimitiveArrayRecord struct {
 	Values []byte
 }
 
+func (m *HProfPrimitiveArrayRecord) Id() uint64 {
+	if m != nil {
+		return m.ArrayObjectId
+	}
+	return 0
+}
+
 func (m *HProfPrimitiveArrayRecord) Type() HProfRecordType {
 	return HProfRecordType(HProfHDRecordTypePrimitiveArrayDump)
 }

@@ -8,6 +8,10 @@ type HProfRecordHeapDumpBoundary struct {
 	HProfBasicRecord
 }
 
+func (m *HProfRecordHeapDumpBoundary) Id() uint64 {
+	return 0
+}
+
 func (m *HProfRecordHeapDumpBoundary) Type() HProfRecordType {
 	return HProfRecordTypeHeapDump
 }

@@ -16,6 +16,13 @@ type HProfObjectArrayRecord struct {
 	ElementObjectIds []uint64
 }
 
+func (m *HProfObjectArrayRecord) Id() uint64 {
+	if m != nil {
+		return m.ArrayObjectId
+	}
+	return 0
+}
+
 func (m *HProfObjectArrayRecord) Type() HProfRecordType {
 	return HProfRecordType(HProfHDRecordTypeObjectArrayDump)
 }

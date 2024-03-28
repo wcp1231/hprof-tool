@@ -2,6 +2,7 @@ package hprof
 
 type HProfRecord interface {
 	PosAndSize() (int64, int)
+	Id() uint64
 }
 
 // HProfBasicRecord 共有字段

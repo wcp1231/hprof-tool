@@ -23,6 +23,13 @@ type HProfInstanceRecord struct {
 	Values []byte
 }
 
+func (m *HProfInstanceRecord) Id() uint64 {
+	if m != nil {
+		return m.ObjectId
+	}
+	return 0
+}
+
 func (m *HProfInstanceRecord) Type() HProfRecordType {
 	return HProfRecordType(HProfHDRecordTypeInstanceDump)
 }
